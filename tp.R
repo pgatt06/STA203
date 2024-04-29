@@ -4,10 +4,6 @@ library(ggplot2)
 #question1: lire les données
 ################################
 
-
-
-
-
 xtrain=read.table("rapport/gasolineTrain.txt",header=T,sep="")
 xtest=read.table("rapport/gasolineTest.txt",header=T,sep="")
 
@@ -23,8 +19,6 @@ nrow=nrow(xtrain)
 
 
 ##tracer des boxplots des variables explicatives 
-
-par(mfrow = c(1, 1) ) # Définir la disposition des graphiques
 for (i in 1:ncol) {
   boxplot(xtrain[, i], main = colnames(xtrain)[i], ylab = "Valeur")
 }
@@ -60,7 +54,7 @@ barplot(eigenvalues,names.arg=1:length(eigenvalues),main="Graphe des valeurs pro
 # Représenter les nuages de points dans les six premiers axes principaux
 plot(res.acp, axes = c(1, 2), choix = "ind", habillage = "none")  # Premier et deuxième axes principaux
 plot(res.acp, axes = c(3, 4), choix = "ind", habillage = "none")  # Troisième et quatrième axes principaux
-plot(res.acp, axes = c(5, 6), choix = "ind", habillage = "none")  # Cinquième et sixième axes principaux
+plot(res.acp, axes = c(4, 5), choix = "ind", habillage = "none")  # Cinquième et sixième axes principaux
 # les deux premiers axes sont les principaux 
 
 
@@ -71,7 +65,7 @@ plot(res.acp, axes = c(5, 6), choix = "ind", habillage = "none")  # Cinquième e
 
 reconstruct=function(res,nr,Xm,Xsd)
 {
-  coord=res.acp$ind$coord[,1:nr]
+  coord=res$ind$coord[,1:nr]
   recons=coord%*% t(res.acp$var$coord[,1:nr])
   for (i in 1:ncol(recons))
   {
@@ -80,12 +74,82 @@ reconstruct=function(res,nr,Xm,Xsd)
   return (recons)
 }
 reconstruct_xtrain=reconstruct(res.acp,
-                               nr=6,
+                               nr=2,
                                Xm=colMeans(xtrain),
                                Xsd=apply(xtrain, 2, sd))
-RMSE <- sqrt(mean((reconstructed_xtrain - xtrain)^2))
+
+par(mfrow = c(1, 1) ) # Définir la disposition des graphiques
+# Initialiser les listes pour stocker les valeurs de RMSE et de MAE
+RMSE_values=list()
+MAE_values=list()
+for (i in (1:5))
+{
+  reconstruct_xtrain=reconstruct(res.acp,
+                                 nr=i,
+                                 Xm=colMeans(xtrain),
+                                 Xsd=apply(xtrain, 2, sd))
+
+  # Convertir xtrain en matrice
+  xtrain_matrix=as.matrix(xtrain)
+  error_squared=(reconstruct_xtrain - xtrain_matrix)^2  # Calcul de l'erreur au carré pour chaque élément
+  RMSE=sqrt(mean(error_squared, na.rm = TRUE))  # Calcul du RMSE en prenant la moyenne des erreurs au carré et en prenant la racine carrée
+  MAE=mean(abs(reconstruct_xtrain-xtrain_matrix))
+  RMSE_values[[i]]=RMSE
+  MAE_values[[i]]=MAE
+
+}
+# Tracer les deux listes sur le même graphe avec une échelle de l'axe des ordonnées adaptée
+plot(1:5, unlist(RMSE_values), type = "l", col = "blue", lwd = 2, 
+     main = "Evolution de RMSE et MAE en fonction de nr", xlab = "Nombre de composantes principales (nr)", ylab = "Valeur", ylim = range(c(unlist(RMSE_values), unlist(MAE_values))))
+lines(1:5, unlist(MAE_values), type = "l", col = "red", lwd = 2)
+legend("topright", legend = c("RMSE", "MAE"), col = c("blue", "red"), lty = 1, lwd = 2, cex = 1.2)
 
 
+
+#affichage de la reconstruction
+
+for (i in (1:5))
+{
+  reconstruct_xtrain=reconstruct(res.acp,
+                                 nr=i,
+                                 Xm=colMeans(xtrain),
+                                 Xsd=apply(xtrain, 2, sd))
+  
+  # Convertir xtrain en matrice
+  xtrain_matrix=as.matrix(xtrain)
+  error_squared=(reconstruct_xtrain - xtrain_matrix)^2  # Calcul de l'erreur au carré pour chaque élément
+  RMSE=sqrt(mean(error_squared, na.rm = TRUE))  # Calcul du RMSE en prenant la moyenne des erreurs au carré et en prenant la racine carrée
+  MAE=mean(abs(reconstruct_xtrain-xtrain_matrix))
+  RMSE_values[[i]]=RMSE
+  MAE_values[[i]]=MAE
+  
+  # Tracer la reconstruction
+  plot.new()
+  plot.window(xlim = c(1, ncol(xtrain)), ylim = range(c(xtrain, reconstruct_xtrain)))
+  title(main = paste("Reconstruction pour nr =", i, "\nRMSE =", round(RMSE, 4), ", MAE =", round(MAE, 4)))
+  for (i in 1:nrow(xtrain)) {
+    lines(1:ncol(xtrain), xtrain[i,], type = "l", col = "blue")
+    lines(1:ncol(xtrain), reconstruct_xtrain[i,], type = "l", col = "red")
+  }
+  legend("topright", legend = c("Original", "Reconstructed"), col = c("blue", "red"), lty = 1, lwd = 2)
+}
+
+
+##courbes à ces 6 niveaux pour le premier spectre 
+# Initialiser une nouvelle fenêtre graphique
+par(mfrow = c(1, 1))
+
+# Créer un vecteur de couleurs pour chaque niveau de nr
+colors <- rainbow(length(c(1:5, 39)))
+
+# Tracer les courbes pour le premier spectre
+plot(1:ncol(xtrain), xtrain[1,], type = "l", col = "blue", lwd = 2, 
+     main = "Courbes pour le premier spectre", xlab = "Fréquence", ylab = "Intensité")
+for (nr in c(1:5, 39)) {
+  lines(1:ncol(xtrain), reconstruct(res.acp, nr = nr, Xm = colMeans(xtrain), Xsd = apply(xtrain, 2, sd))[1,], 
+        type = "l", col = colors[nr], lwd = 2)
+}
+legend("topright", legend = c(1:5, 39), col = colors, lty = 1, lwd = 2, title = "nr")
 
 
 #############################################################
@@ -111,7 +175,9 @@ coef(ridge_model)
 plot(ridge_model, xvar = "lambda", label = TRUE)
 ## on remarque bien une convergence vers 0 lorsque lambda augmente 
 ## avec lambda le paramètre de pénalisation 
-
+# Examiner la variation de la valeur estimée du paramètre d'interception
+intercept_values=coef(ridge_model)[1, ]
+plot(log10(grid), intercept_values, type = "l", xlab = "log(lambda)", ylab = "Estimation de l'intercept", main = "Variation de l'intercept en fonction de lambda")
 ##recalculer 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   
@@ -147,5 +213,28 @@ library(MASS)
 #standardiser nos données 
 xtrain_stand=scale(xtrain)
 ytrain_stand=scale(ytrain)
+ridge_model_lm=lm.ridge(ytrain_stand~xtrain_stand,lambda=grid)
+plot(ridge_model_lm)
+# Comparer les coefficients estimés par lm.ridge avec ceux calculés directement
+coefficients_lm_ridge=coef(ridge_model_lm)
+coefficients_calculated=coef(ridge_model)
+plot(coefficients_calculated,col="purple")
+lines(coefficients_lm_ridge,col="pink")
 
-?lm.ridge
+
+
+##
+# Calculer les estimations directes pour la régression ridge
+lambda_min <- min(grid)
+theta_b_lambda_min <- coefficients_calculated[, which.min(grid)]
+estimated_coefficients <- theta_b_lambda_min / (1 + lambda_min)
+
+# Afficher les estimations calculées directement
+print(estimated_coefficients)
+
+# Comparer avec les estimations fournies par glmnet
+print(coef(ridge_model_lm)[, which.min(grid)])
+
+# Vérifier en lançant lm.ridge avec une grille modifiée
+ridge_model_lm_modified <- lm.ridge(ytrain_stand ~ xtrain_stand, lambda = lambda_min)
+print(coef(ridge_model_lm_modified))
