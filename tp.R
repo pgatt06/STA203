@@ -19,6 +19,7 @@ nrow=nrow(xtrain)
 
 
 ##tracer des boxplots des variables explicatives 
+par(mfrow=c(1, 1))
 for (i in 1:ncol) {
   boxplot(xtrain[, i], main = colnames(xtrain)[i], ylab = "Valeur")
 }
@@ -32,7 +33,7 @@ for (i in 1:nrow) {
 ##etude de la corrélation 
 correlation= cor(xtrain)
 library(corrplot)
-corrplot(cor(scale(xtrain)),method="circle")
+corrplot(cor(xtrain),method="circle")
 
 
 
@@ -162,9 +163,9 @@ legend("topright", legend = c(1:5, 39), col = colors, lty = 1, lwd = 2, title = 
 library(glmnet)
 
 # Préparer les matrices xtrain et ytrain
-xtrain_matrix <- as.matrix(xtrain)
-ytrain_vector <- as.vector(ytrain)
-
+xtrain_matrix=as.matrix(xtrain)
+ytrain_vector=as.vector(ytrain)
+xtest_matrix=as.matrix(xtest)
 # Créer une grille de paramètres pour lambda
 grid = 10^seq(6, -10, length = 100)
 # Estimer le modèle de régression ridge avec glmnet
@@ -219,7 +220,7 @@ plot(ridge_model_lm)
 coefficients_lm_ridge=coef(ridge_model_lm)
 coefficients_calculated=coef(ridge_model)
 plot(coefficients_calculated,col="purple")
-lines(coefficients_lm_ridge,col="pink")
+plot(coefficients_lm_ridge,col="pink")
 
 
 
@@ -238,3 +239,127 @@ print(coef(ridge_model_lm)[, which.min(grid)])
 # Vérifier en lançant lm.ridge avec une grille modifiée
 ridge_model_lm_modified <- lm.ridge(ytrain_stand ~ xtrain_stand, lambda = lambda_min)
 print(coef(ridge_model_lm_modified))
+
+
+
+##3.
+?cv.glmnet
+??cvsegments
+## on définit le germe du générateur aléatoire
+set.seed(123)
+#nombre de plis vaut 4
+B=4
+cv_result=cv.segments(xtrain,family="binomial",alpha=0,lambda=grid,B=B)
+
+
+
+
+dummy_response <- rep(1, nrow(xtrain_matrix))  # Utilisation d'un vecteur de 1
+
+cvfit=cv.glmnet(xtrain_matrix,
+                y=dummy_response,
+                alpha=0,
+                lambda=grid,
+                nfolds=4
+                )
+plot(cvfit)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##########################
+# PARTIE 4
+##########################
+#1.
+##pour créer les variables z et z test on pourrait leur donner soit 1 ou -1
+## en fonction de si la teneur en octane est sup ou inf au seuil qui vaut 88
+
+## pour l'apprentissage 
+#1 c'est si teneur > 88 
+#-1 sinon
+z=ifelse (ytrain>88,1,-1)
+ztest=ifelse(ytest>88,1,-1)
+table(z)
+#-1  1 
+#20 16 
+table(ztest)
+#-1  1 
+#13 11 
+
+## dans les deux cas on a le nbre d'observation en teneur en octane <88 superieur à celles au dessus 
+
+
+
+##2.
+?cv.glmnet
+## on nous dit de veiller à foldid 
+## en gros, foldid c'est pour spécifier les plis à utiliser lors de la validation croisée
+foldid=sample(rep(1:4, length.out=nrow(xtrain)))
+reglog_ridge=cv.glmnet(x=xtrain_matrix,
+                 y=z,
+                 alpha=0,
+                 lambda=grid,
+                 type.measure="class",
+                 foldid=foldid)
+reglog_lasso=cv.glmnet(x=xtrain_matrix,
+                       y=z,
+                       alpha=1,
+                       lambda=grid,
+                       type.measure="class",
+                       foldid=foldid)
+erreur_ridge=min(reglog_ridge$cvm)
+erreur_ridge 
+
+erreur_lasso=min(reglog_lasso$cvm)
+erreur_lasso 
+
+
+
+
+
+##3.
+library(ROCR)
+##apprentissage
+predproba_ridge=predict(reglog_ridge,type="response",newx=xtrain_matrix)
+pred_ridge=prediction(predproba_ridge,z)
+plot(performance(pred_ridge,"sens","fpr"),xlab="",col=2)
+
+
+predproba_lasso=predict(reglog_lasso,type="response",newx=xtrain_matrix)
+pred_lasso=prediction(predproba_lasso,z)
+plot(performance(pred_lasso,"sens","fpr"),xlab="",col=2)
+
+
+##test
+predproba_ridge_t=predict(reglog_ridge,type="response",newx=xtest_matrix)
+pred_ridge_t=prediction(predproba_ridge_t,ztest)
+plot(performance(pred_ridge_t,"sens","fpr"),xlab="",col=2)
+
+
+predproba_lasso_t=predict(reglog_lasso,type="response",newx=xtest_matrix)
+pred_lasso_t=prediction(predproba_lasso_t,ztest)
+plot(performance(pred_lasso_t,"sens","fpr"),xlab="",col=2)
+
