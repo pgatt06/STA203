@@ -4,8 +4,8 @@ library(ggplot2)
 #question1: lire les données
 ################################
 
-xtrain=read.table("rapport/gasolineTrain.txt",header=T,sep="")
-xtest=read.table("rapport/gasolineTest.txt",header=T,sep="")
+xtrain=read.table("/Users/p.gatt/Documents/2A/maths/STA203/TP_Supervise/gasolineTrain.txt",header=T,sep="")
+xtest=read.table("/Users/p.gatt/Documents/2A/maths/STA203/TP_Supervise/gasolineTest.txt",header=T,sep="")
 
 #formation des valeurs y 
 ytrain=xtrain$octane
@@ -204,6 +204,42 @@ plot(ridge_model_4, xvar = "lambda", label = TRUE)
 ####################"
 # il reste à faire 
 
+
+X=as.matrix(xtrain)
+
+#Calcul à la main 
+XtX=t(X)%*%X
+#dim 36 x 36 
+
+resultat_eigen= eigen(XtX)
+sigma_XtX= resultat_eigen$values[resultat_eigen$values >1e-6]
+Sigma_XtX =diag(sigma_XtX)
+
+#décompo en valeur singulière
+svd_X = svd(X)
+U = svd_X$u
+V = svd_X$v
+
+V=as.matrix(V)
+sigma = svd_X$d
+Sigma = diag(sigma)
+
+XtX_reconstructed= V %*% Sigma%*%Sigma %*% t(V)
+difference= abs(XtX - XtX_reconstructed)
+
+#difference nulle c'est bien les deux mêmes matrices
+
+lambda= 0
+XtX_lambda_inv = V %*% diag(1 / (sigma^2 + lambda)) %*% t(V)
+A0 = V %*% diag(1 / (sigma^2)) %*% t(V)
+
+#verification pseudo-inverse ? 
+
+# Définir lambda très proche de zéro
+lambda = 1e-10
+
+# Calculer l'estimateur theta_lambda avec lambda tendant vers 0
+theta_lambda = solve(XtX + lambda * diag(ncol(XtX))) %*% t(as.matrix(xtest)) %*%as.matrix(xtest)
 
 
 
