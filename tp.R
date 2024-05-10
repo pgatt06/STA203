@@ -64,46 +64,63 @@ plot(res.acp, axes = c(4, 5), choix = "ind", habillage = "none")  # Cinquième e
 #question 3
 ############################
 
-reconstruct=function(res,nr,Xm,Xsd)
-{
-  coord=res$ind$coord[,1:nr]
-  recons=coord%*% t(res.acp$var$coord[,1:nr])
-  for (i in 1:ncol(recons))
-  {
-    recons[,i]=recons[,i]*Xsd[i]+ Xm[i]
+reconstruct = function(res, nr, Xm, Xsd) {
+  
+  cord_ind = res$ind$coord[, 1:nr]
+  reconstructed_data = cord_ind %*% t(res$var$coord[, 1:nr])
+  for (i in 1:ncol(reconstructed_data)) {
+    reconstructed_data[, i] <- Xsd[i] *  reconstructed_data[, i]  + Xm[i]
   }
-  return (recons)
+  return(reconstructed_data)
 }
-reconstruct_xtrain=reconstruct(res.acp,
-                               nr=2,
-                               Xm=colMeans(xtrain),
-                               Xsd=apply(xtrain, 2, sd))
 
-par(mfrow = c(1, 1) ) # Définir la disposition des graphiques
-# Initialiser les listes pour stocker les valeurs de RMSE et de MAE
-RMSE_values=list()
-MAE_values=list()
-for (i in (1:5))
-{
-  reconstruct_xtrain=reconstruct(res.acp,
-                                 nr=i,
-                                 Xm=colMeans(xtrain),
-                                 Xsd=apply(xtrain, 2, sd))
 
-  # Convertir xtrain en matrice
-  xtrain_matrix=as.matrix(xtrain)
+Xm <- apply(xtrain, 2, mean)
+Xsd <- apply(xtrain, 2, sd)
+
+list_n <- c(1, 2, 3, 4)
+
+plots <- list()
+par(mfrow = c(2, 2))
+error <- data.frame(nr = integer(), RMSE = numeric(), MAE = numeric())
+
+for (n in list_n) {
+  reconstructed <- corrige(res.acp, n, Xm, Xsd)
   error_squared=(reconstruct_xtrain - xtrain_matrix)^2  # Calcul de l'erreur au carré pour chaque élément
   RMSE=sqrt(mean(error_squared, na.rm = TRUE))  # Calcul du RMSE en prenant la moyenne des erreurs au carré et en prenant la racine carrée
   MAE=mean(abs(reconstruct_xtrain-xtrain_matrix))
-  RMSE_values[[i]]=RMSE
-  MAE_values[[i]]=MAE
+  error <- rbind(error, data.frame(nr = n, RMSE = RMSE, MAE = MAE))
 
+  plot(reconstructed, main = paste('reconstruction nr= ', n, '\n RMSE = ', round(RMSE, 4), "\n MAE =", round(MAE, 4)))
 }
+
+
+
+#par(mfrow = c(1, 1) ) # Définir la disposition des graphiques
+# Initialiser les listes pour stocker les valeurs de RMSE et de MAE
+#RMSE_values=list()
+#MAE_values=list()
+#for (i in (1:5)
+#{
+#reconstruct_xtrain=reconstruct(res.acp,
+#                                 nr=i,
+#                                 Xm=colMeans(xtrain),
+#                                 Xsd=apply(xtrain, 2, sd))
+#
+#  # Convertir xtrain en matrice
+#  xtrain_matrix=as.matrix(xtrain)
+#  error_squared=(reconstruct_xtrain - xtrain_matrix)^2  # Calcul de l'erreur au carré pour chaque élément
+#  RMSE=sqrt(mean(error_squared, na.rm = TRUE))  # Calcul du RMSE en prenant la moyenne des erreurs au carré et en prenant la racine carrée
+#  MAE=mean(abs(reconstruct_xtrain-xtrain_matrix))
+#  RMSE_values[[i]]=RMSE
+#  MAE_values[[i]]=MAE
+#
+#}
 # Tracer les deux listes sur le même graphe avec une échelle de l'axe des ordonnées adaptée
-plot(1:5, unlist(RMSE_values), type = "l", col = "blue", lwd = 2, 
-     main = "Evolution de RMSE et MAE en fonction de nr", xlab = "Nombre de composantes principales (nr)", ylab = "Valeur", ylim = range(c(unlist(RMSE_values), unlist(MAE_values))))
-lines(1:5, unlist(MAE_values), type = "l", col = "red", lwd = 2)
-legend("topright", legend = c("RMSE", "MAE"), col = c("blue", "red"), lty = 1, lwd = 2, cex = 1.2)
+#plot(1:5, unlist(RMSE_values), type = "l", col = "blue", lwd = 2, 
+#     main = "Evolution de RMSE et MAE en fonction de nr", xlab = "Nombre de composantes principales (nr)", ylab = "Valeur", ylim = range(c(unlist(RMSE_values), unlist(MAE_values))))
+#lines(1:5, unlist(MAE_values), type = "l", col = "red", lwd = 2)
+#legend("topright", legend = c("RMSE", "MAE"), col = c("blue", "red"), lty = 1, lwd = 2, cex = 1.2)
 
 
 
@@ -279,32 +296,84 @@ print(coef(ridge_model_lm_modified))
 
 
 ##3.
+
+par(mfrow = c(1, 1))
+library(pls)
 ?cv.glmnet
 ??cvsegments
 ## on définit le germe du générateur aléatoire
 set.seed(123)
 #nombre de plis vaut 4
 B=4
-cv_result=cv.segments(xtrain,family="binomial",alpha=0,lambda=grid,B=B)
+cv_indices=cvsegments(nrow(xtrain),B)
+
+X_train = as.matrix(xtrain)
+library(glmnet)
+library(Matrix)
 
 
+lambda_values = 10^seq(-10,1, length = 100)
+
+cv_mse = matrix(NA, nrow = B, ncol = length(lambda_values))
+cv_mae = matrix(NA, nrow = B, ncol = length(lambda_values))
+
+for (i in 1:B) {
+  
+  train_idx = unlist(cv_indices[-i])
+  valid_idx = unlist(cv_indices[i])
+  
+  
+  X_train_cv = X_train[train_idx, ]
+  y_train_cv = ytrain[train_idx]
+  X_valid_cv= X_train[valid_idx, ]
+  y_valid_cv = ytrain[valid_idx]
+  
+  
+  for (j in seq_along(lambda_values)) {
+    
+    ridge_model= glmnet(X_train_cv, y_train_cv, alpha = 0, lambda = lambda_values[j])
+    
+    
+    y_pred = predict(ridge_model, newx = X_valid_cv)
+    
+    # Calcul de l'erreur quadratique moyenne (MSE) et de l'erreur absolue moyenne (MAE)
+    cv_mse[i, j] = mean((y_pred - y_valid_cv)^2)
+    cv_mae[i, j] = mean(abs(y_pred - y_valid_cv))
+  }
+}
+
+# Calcul de l'erreur moyenne et de l'intervalle de confiance pour chaque valeur de lambda
+mean_cv_mse =apply(cv_mse, 2, mean)
+mean_cv_mae = apply(cv_mae, 2, mean)
+se_cv_mse = apply(cv_mse, 2, sd) / sqrt(B)
+se_cv_mae = apply(cv_mae, 2, sd) / sqrt(B)
+
+plot(lambda_values, mean_cv_mse, type = "l", ylim = range(mean_cv_mse - 2 * se_cv_mse, mean_cv_mse + 2 * se_cv_mse), 
+     xlab = "Lambda", ylab = "MSE", main = "Erreur moyenne avec intervalle de confiance", col = "blue", lwd = 2)
+lines(lambda_values, mean_cv_mse - 2 * se_cv_mse, lty = 2, col = "red", lwd = 2)
+lines(lambda_values, mean_cv_mse + 2 * se_cv_mse, lty = 2, col = "red", lwd = 2)
 
 
-dummy_response <- rep(1, nrow(xtrain_matrix))  # Utilisation d'un vecteur de 1
-
-cvfit=cv.glmnet(xtrain_matrix,
-                y=dummy_response,
-                alpha=0,
-                lambda=grid,
-                nfolds=4
-                )
-plot(cvfit)
+legend("topright", legend = c("MSE moyen", "Intervalle de confiance"), col = c("blue", "red"), lty = c(1, 2), lwd = 2)
 
 
+plot(lambda_values, mean_cv_mae, type = "l", ylim = range(mean_cv_mae - 2 * se_cv_mae, mean_cv_mae + 2 * se_cv_mae), 
+     xlab = "Lambda", ylab = "MAE", main = "Erreur moyenne avec intervalle de confiance (MAE)", col = "blue", lwd = 2)
+lines(lambda_values, mean_cv_mae - 2 * se_cv_mae, lty = 2, col = "red", lwd = 2)
+lines(lambda_values, mean_cv_mae + 2 * se_cv_mae, lty = 2, col = "red", lwd = 2)
 
 
+legend("topright", legend = c("MAE moyen", "Intervalle de confiance"), col = c("blue", "red"), lty = c(1, 2), lwd = 2)
 
 
+cv.glmnet(X_train,as.matrix(ytrain))
+
+
+#Measure: Mean-Squared Error 
+
+#Lambda Index Measure       SE Nonzero
+#min 0.01455    96 0.05648 0.010231      13
+#1se 0.02790    82 0.06651 0.009804      12
 
 
 
